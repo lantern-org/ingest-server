@@ -1,5 +1,6 @@
 # ingest-server
-test
+
+## helplful links
 
 <https://stackoverflow.com/questions/40917372/udp-forwarding-with-nginx>
 
@@ -8,3 +9,53 @@ test
 
 <https://gist.github.com/miekg/d9bc045c89578f3cc66a214488e68227>
 <https://ops.tips/blog/udp-client-and-server-in-go/#receiving-from-a-udp-connection-in-a-server>
+
+## encrypting the channel
+
+We assume we have a secure connection over HTTPS via TLS.
+To start a session, we generate a 32-byte (256-bit) key (basically a really long password) on the phone-side.
+Then we share this key to the server over a TLS secure connection.
+We encrypt the(all) UDP packet(s) on the phone-side using the key with AES-256.
+We send the packet(s) to the server on an insecure line, and decrypt using the shared key.
+Done.
+
+## packet construction
+
+On the phone-end, we have to get the lat/lon and send to the server.
+On Android, lat/lon are returned as a `double`.
+We assume 3-digit integers with 5-digit fractional parts.
+For one value, that's 8 digits.
+
+If we convert each digit to a character, then encode into binary, that's 8 bytes per value.
+Obviously we want to limit our sent-data as much as possible.
+I don't really want to do huffman encoding or any sort of compression, though (but we could, for sure).
+Okay, well 8 digits in binary is just `log_2(100000000) = 8/log_10(2) ~ 26.58`, so 4 bytes (maybe 3 depending on what value we actually would go up to).
+We've already halved our byte value, lovely.
+I'm sure there are better ways to translate GPS to binary.
+
+Of course, we still have negatives to worry about.
+Maybe we should format a bit-string.
+1 bit for sign, 10 bits for integer part, 17 bits for decimal part
+```
+0000siii iiiiiiif ffffffff ffffffff
+```
+Honestly good enough.
+
+Other data to send:
+- date/time of recorded position (Location.getTime returns long == 64 bits == 8 bytes)
+- checksum (SHA-256 returns 256 bits = 32 bytes -- MD5 returns 128 bits = 16 bytes)
+
+```
+lat  0000siii iiiiiiif ffffffff ffffffff
+lon  0000siii iiiiiiif ffffffff ffffffff
+time bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (useful for ordering, avoiding replay attacks)
+     bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb
+sum  cccccccc cccccccc cccccccc cccccccc (MD5 isn't as strong as SHA256)
+     cccccccc cccccccc cccccccc cccccccc (but we're only using for corruption-checking)
+     cccccccc cccccccc cccccccc cccccccc (consider selecting a few bytes and transmitting just those?)
+     cccccccc cccccccc cccccccc cccccccc
+```
+totals 32 byte packet -- that's pretty good
+
+latitude runs -90 to +90
+longitude runs -180 to +180
