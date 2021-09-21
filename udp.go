@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
@@ -8,6 +10,19 @@ import (
 	"net"
 	"time"
 )
+
+// the block size == 16 bytes
+var d cipher.Block
+
+func decrypt(c []byte) []byte {
+	// use key with AES-256
+	p := make([]byte, len(c))
+	numBlocks := len(c) / aes.BlockSize
+	for i := 0; i < numBlocks; i++ {
+		d.Decrypt(p[i*aes.BlockSize:(i+1)*aes.BlockSize], c[i*aes.BlockSize:(i+1)*aes.BlockSize])
+	}
+	return p
+}
 
 func toAngle(b []byte) string {
 	val := binary.BigEndian.Uint32(b)
@@ -28,8 +43,12 @@ func toTime(b []byte) string {
 }
 
 func handlePacket(packet []byte) error {
+	if len(packet)%aes.BlockSize != 0 {
+		return errors.New("invalid packet size")
+	}
 	// decrypt packet
-	// ...
+	packet = decrypt(packet)
+	fmt.Printf("%v\n", packet)
 	// validate packet (length already handled, == 32)
 	sum := md5.Sum(packet[:16])
 	for i, b := range sum {
@@ -65,6 +84,9 @@ func startUDP(uDied <-chan int, iDied chan<- error) {
 			// if len(packet) > len(buffer) then n == len(buffer)
 			// so we'll have to figure out how to receive larger packets
 			n, addr, err := pc.ReadFrom(buffer)
+			if len(key) < 32 {
+				continue
+			}
 			fmt.Printf(" %v \n", n)
 			if err != nil {
 				die <- err
@@ -77,7 +99,7 @@ func startUDP(uDied <-chan int, iDied chan<- error) {
 				// todo
 			}
 
-			fmt.Printf(" > packet:\n     #bytes:%v\n     from:%s\n", buffer[:n], addr.String())
+			fmt.Printf(" > packet:\n     bytes:%v\n     from:%s\n", buffer[:n], addr.String())
 
 			// do stuff with packet
 			handlePacket(buffer[:n])

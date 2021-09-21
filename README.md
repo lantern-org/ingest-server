@@ -1,5 +1,7 @@
 # ingest-server
 
+You MUST host this server behind an HTTPS proxy!
+
 ## helplful links
 
 <https://stackoverflow.com/questions/40917372/udp-forwarding-with-nginx>

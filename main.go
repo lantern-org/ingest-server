@@ -8,6 +8,8 @@ const maxBufferSize = 512 // bytes
 const apiAddr = "127.0.0.1:420"
 const udpAddr = "127.0.0.1:69"
 
+var key []byte
+
 func main() {
 	fmt.Println(" * starting...")
 

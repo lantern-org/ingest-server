@@ -1,4 +1,5 @@
-import random,time,hashlib,socket
+import random,time,hashlib,secrets,requests,socket
+from Crypto.Cipher import AES
 
 # generate random lat/lon position
 lat = random.uniform(-90,90)
@@ -39,7 +40,15 @@ packet = m + c.digest()
 
 print(packet)
 
-sock =  socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# transmit key
+key = secrets.token_hex(nbytes=32)
+r = requests.post('http://127.0.0.1:420/session', data="{\"key\":\""+key+"\"}")
+print(r.text)
+
+# encrypt packet using AES-256
+packet = AES.new(bytearray.fromhex(key), AES.MODE_ECB).encrypt(packet)
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 res = sock.sendto(packet, ("127.0.0.1",69))
 
 print(res) # i think num bytes sent
