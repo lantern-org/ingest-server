@@ -48,10 +48,10 @@ Other data to send:
 - checksum (SHA-256 returns 256 bits = 32 bytes -- MD5 returns 128 bits = 16 bytes)
 
 ```
-lat  0000siii iiiiiiif ffffffff ffffffff
-lon  0000siii iiiiiiif ffffffff ffffffff
 time bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (useful for ordering, avoiding replay attacks)
      bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb
+lat  0000siii iiiiiiif ffffffff ffffffff
+lon  0000siii iiiiiiif ffffffff ffffffff
 sum  cccccccc cccccccc cccccccc cccccccc (MD5 isn't as strong as SHA256)
      cccccccc cccccccc cccccccc cccccccc (but we're only using for corruption-checking)
      cccccccc cccccccc cccccccc cccccccc (consider selecting a few bytes and transmitting just those?)
@@ -61,3 +61,11 @@ totals 32 byte packet -- that's pretty good
 
 latitude runs -90 to +90
 longitude runs -180 to +180
+
+## multiple clients
+
+if someone else wants to send data, then we give them a new port
+
+ideally, we'll run a server on multiple nodes on the same network, where each node/server serves a port range decided by the orchestrator in a command-line arg
+
+and then the overall network mapper can send a range of ports all to the local network
