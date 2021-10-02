@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"time"
 )
@@ -22,17 +23,19 @@ func (s Session) decrypt(c []byte) []byte {
 
 func toAngle(b []byte) float32 {
 	val := binary.BigEndian.Uint32(b)
-	i := float32((val & 0x07fe0000) >> 17)
-	f := float32(val&0x0001ffff) / 100000
-	l := i + f
-	if val&0x08000000 > 0 {
-		l *= -1
-	}
-	// return fmt.Sprintf("%v", l)
-	return l
+	// i := float32((val & 0x07fe0000) >> 17)
+	// f := float32(val&0x0001ffff) / 100000
+	// l := i + f
+	// if val&0x08000000 > 0 {
+	// 	l *= -1
+	// }
+	// // return fmt.Sprintf("%v", l)
+	// return l
+	return math.Float32frombits(val)
 }
 
 func toTime(b []byte) int64 {
+	// require transmission in BigEndian
 	val := binary.BigEndian.Uint64(b) // millis
 	sec := val / 1000
 	nsec := (val - sec*1000) * 1000000
@@ -64,7 +67,7 @@ func (s Session) handlePacket(packet []byte) error {
 	var lat = toAngle(packet[0:4])
 	var lon = toAngle(packet[4:8])
 	// just print out data for now
-	fmt.Printf("lat: %v\nlon: %v\ntime: %v\n", lat, lon, t)
+	fmt.Printf("lat: %f\nlon: %f\ntime: %v\n", lat, lon, t)
 	sessions[s.port].data[t] = Data{
 		Time: t,
 		Lat:  lat,

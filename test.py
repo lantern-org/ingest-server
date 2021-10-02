@@ -1,4 +1,4 @@
-import random,time,hashlib,secrets,requests,socket
+import random,time,ctypes,hashlib,secrets,requests,socket
 from multiprocessing.dummy import Pool as ThreadPool
 from Crypto.Cipher import AES
 
@@ -12,25 +12,27 @@ def random_packet(p=False):
 
     # get current time in millis since epoch
     t = time.time()
-    if p: print(time.localtime(t))
     t = int(t*1000)
+    if p: print(t)
     # print(bin(t))
 
     # get message
     def toM(l):
-        r = 0
-        if l < 0:
-            r = 1
-            l *= -1
-        r = (r << 10) | int(l)
-        l = (l-int(l)) * 100000
-        r = (r << 17) | int(l)
-        if p: print(bin(r))
-        return r
-    m = (((toM(lat) << 8*4) | toM(lon)) << 8*8) | t
-    if p: print(bin(m))
-
-    m = m.to_bytes(16,'big')
+        # r = 0
+        # if l < 0:
+        #     r = 1
+        #     l *= -1
+        # r = (r << 10) | int(l)
+        # l = (l-int(l)) * 100000
+        # r = (r << 17) | int(l)
+        # if p: print(bin(r))
+        # return r
+        return ctypes.c_uint.from_buffer(ctypes.c_float(l)).value.to_bytes(4, 'big')
+    
+    # m = (((toM(lat) << 8*4) | toM(lon)) << 8*8) | t
+    # if p: print(bin(m))
+    # m = m.to_bytes(16,'big')
+    m = toM(lat) + toM(lon) + t.to_bytes(8, 'big')
 
     # get checksum
     c = hashlib.md5(m)
@@ -43,20 +45,22 @@ def random_packet(p=False):
     if p: print(packet)
     return packet
 
-num_conn = 3
-num_packets = 10
+# num_conn = 3
+# num_packets = 10
+num_conn = 1
+num_packets = 1
 
-def transmit(key, packet=None):
-    # get data packet
-    if packet is None: packet = random_packet()
-    # encrypt packet using AES-256
-    packet = AES.new(bytearray.fromhex(key), AES.MODE_ECB).encrypt(packet)
+# def transmit(key, packet=None):
+#     # get data packet
+#     if packet is None: packet = random_packet()
+#     # encrypt packet using AES-256
+#     packet = AES.new(bytearray.fromhex(key), AES.MODE_ECB).encrypt(packet)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    res = sock.sendto(packet, ("127.0.0.1",69))
+#     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#     res = sock.sendto(packet, ("127.0.0.1",69))
 
-    print(res) # i think num bytes sent
-    return
+#     print(res) # i think num bytes sent
+#     return
 
 def doit(me):
     # encryption key, start session
@@ -71,7 +75,7 @@ def doit(me):
     # transmit random data packets
     packets = []
     for i in range(num_packets):
-        packet = random_packet()
+        packet = random_packet(p=True)
         packets.append(packet)
         # encrypt random packet using AES-256
         packet = AES.new(bytearray.fromhex(key), AES.MODE_ECB).encrypt(packet)

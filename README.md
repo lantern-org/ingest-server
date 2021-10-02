@@ -48,10 +48,10 @@ Other data to send:
 - checksum (SHA-256 returns 256 bits = 32 bytes -- MD5 returns 128 bits = 16 bytes)
 
 ```
-time bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (useful for ordering, avoiding replay attacks)
-     bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb
-lat  0000siii iiiiiiif ffffffff ffffffff
+lat  0000siii iiiiiiif ffffffff ffffffff (-> use IEEE 754 float instead)
 lon  0000siii iiiiiiif ffffffff ffffffff
+time bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (useful for ordering, avoiding replay attacks)
+     bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (required: BIG-endian)
 sum  cccccccc cccccccc cccccccc cccccccc (MD5 isn't as strong as SHA256)
      cccccccc cccccccc cccccccc cccccccc (but we're only using for corruption-checking)
      cccccccc cccccccc cccccccc cccccccc (consider selecting a few bytes and transmitting just those?)

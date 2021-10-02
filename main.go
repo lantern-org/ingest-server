@@ -26,8 +26,8 @@ var apiDied chan error
 
 type Data struct {
 	Time int64   `json:"time"`
-	Lat  float32 `json:"latitude"`
-	Lon  float32 `json:"longitude"`
+	Lat  float32 `json:"latitude"`  // is it worth it to marshal the actual values, or can we use approx?
+	Lon  float32 `json:"longitude"` // i think we can use approx
 }
 type Session struct {
 	addr      string
@@ -49,7 +49,8 @@ func main() {
 	apiAddrPtr := flag.String("api-addr", "127.0.0.1", "ip-address for API handler")
 	apiPortPtr := flag.Int("api-port", 420, "port for API handler")
 	udpAddrPtr := flag.String("udp-addr", "127.0.0.1", "ip-address for UDP server")
-	udpPortsPtr := flag.String("udp-ports", "69,71-73", "list of ports available for UDP server -- comma-separated list, use '-' to specify port range")
+	// https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+	udpPortsPtr := flag.String("udp-ports", "42069,49152-65535", "list of ports available for UDP server -- comma-separated list, use '-' to specify port range")
 	flag.Parse()
 
 	// verify args
@@ -102,7 +103,11 @@ func main() {
 	for _, v := range udpPortsList {
 		udpPorts <- v
 	}
-	fmt.Printf(" > UDP port pool %v\n", udpPortsList)
+	if len(udpPortsList) > 10 {
+		fmt.Printf(" > UDP port pool %v ... [%v]\n", udpPortsList[0:10], udpPortsList[len(udpPortsList)-1])
+	} else {
+		fmt.Printf(" > UDP port pool %v\n", udpPortsList)
+	}
 
 	// start up handlers
 	fmt.Println(" * starting server...")

@@ -33,6 +33,15 @@ func newPort() int {
 	}
 }
 
+/*
+TODO -- add timer for each UDP session that kills the connection
+if it hasn't received an update in a while (30mins?)
+*/
+
+/*
+TODO -- proper logging and error messages
+*/
+
 func startSession(w http.ResponseWriter, r *http.Request) {
 	/*
 		POST
@@ -89,6 +98,7 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	// start new session
 	var port = newPort()
+	// ok==true imples that port's session is still active (shouldn't happen unless there's an inconsistency)
 	if _, ok := sessions[port]; port == -1 || ok {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Add("Content-Type", "application/json")
@@ -159,12 +169,13 @@ func endSession(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"error\":\"failed\"}")) // handle error?
 		return
 	}
+	udpPorts <- s.port // free back the port (shouldn't block)
 	s.die <- 1
 	go func() {
 		// export to file
 		s.EndTime = time.Now()
 		// s.StartTime.Format("2006-01-02_15-04-05")
-		f, err := os.Create(s.token.String() + "_" + strconv.Itoa(s.port) + ".dat")
+		f, err := os.Create("data/" + s.token.String() + "_" + strconv.Itoa(s.port) + ".dat")
 		if err != nil {
 			fmt.Printf("err: %v\n", err)
 			return
@@ -185,6 +196,8 @@ func endSession(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Write(j)
 		f.Close() // don't care about error
+		// finally, delete the session from our active map
+		delete(sessions, v.Port)
 	}()
 	// assume go-routine succeeded
 	w.WriteHeader(http.StatusOK)
