@@ -30,25 +30,29 @@ type Data struct {
 	Lon  float32 `json:"longitude"` // i think we can use approx
 }
 type Session struct {
-	addr      string
-	port      int
-	key       []byte
-	token     uuid.UUID
-	decr      cipher.Block // the block size == 16 bytes
-	die       chan int
-	StartTime time.Time      `json:"start"`
-	EndTime   time.Time      `json:"end"`
-	data      map[int64]Data // TODO -- make this a redis cache
-	Data      []Data         `json:"data"` // sorted exported version
+	addr       string
+	port       int
+	key        []byte
+	token      uuid.UUID
+	code       string       // 4-char code
+	decr       cipher.Block // the block size == 16 bytes
+	die        chan int
+	StartTime  time.Time      `json:"start"`
+	EndTime    time.Time      `json:"end"`
+	data       map[int64]Data // TODO -- make this a redis cache
+	recentTime int64          // most recently added time
+	Data       []Data         `json:"data"` // sorted exported version
 }
 
-var sessions map[int]Session = make(map[int]Session) // port->data
+var sessions map[int]*Session = make(map[int]*Session) // port->data
+
+var codes map[string]int = make(map[string]int) // code->port
 
 func main() {
 	// setup command-line args
-	apiAddrPtr := flag.String("api-addr", "127.0.0.1", "ip-address for API handler")
+	apiAddrPtr := flag.String("api-addr", "", "ip-address for API handler")
 	apiPortPtr := flag.Int("api-port", 420, "port for API handler")
-	udpAddrPtr := flag.String("udp-addr", "127.0.0.1", "ip-address for UDP server")
+	udpAddrPtr := flag.String("udp-addr", "", "ip-address for UDP server")
 	// https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 	udpPortsPtr := flag.String("udp-ports", "42069,49152-65535", "list of ports available for UDP server -- comma-separated list, use '-' to specify port range")
 	flag.Parse()
@@ -59,11 +63,11 @@ func main() {
 		fmt.Printf("err %v\n", err)
 		return
 	}
-	if !r.MatchString(*apiAddrPtr) {
+	if !r.MatchString(*apiAddrPtr) && *apiAddrPtr != "" {
 		fmt.Printf("invalid api-addr %v\n", *apiAddrPtr)
 		return
 	}
-	if !r.MatchString(*udpAddrPtr) {
+	if !r.MatchString(*udpAddrPtr) && *apiAddrPtr != "" {
 		fmt.Printf("invalid udp-addr %v\n", *udpAddrPtr)
 		return
 	}

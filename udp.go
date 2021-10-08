@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func (s Session) decrypt(c []byte) []byte {
+func (s *Session) decrypt(c []byte) []byte {
 	// use key with AES-256
 	p := make([]byte, len(c))
 	numBlocks := len(c) / aes.BlockSize
@@ -42,7 +42,7 @@ func toTime(b []byte) int64 {
 	return time.Unix(int64(sec), int64(nsec)).UnixMilli()
 }
 
-func (s Session) handlePacket(packet []byte) error {
+func (s *Session) handlePacket(packet []byte) error {
 	// TODO -- this should be safe inside a go-routine
 	if len(packet)%aes.BlockSize != 0 {
 		// ignore packet
@@ -60,7 +60,7 @@ func (s Session) handlePacket(packet []byte) error {
 	}
 	// save somewhere
 	var t = toTime(packet[8:16])
-	if _, ok := sessions[s.port].data[t]; ok {
+	if _, ok := s.data[t]; ok {
 		// ignore packet
 		return errors.New("packet time already recorded")
 	}
@@ -68,16 +68,18 @@ func (s Session) handlePacket(packet []byte) error {
 	var lon = toAngle(packet[4:8])
 	// just print out data for now
 	fmt.Printf("lat: %f\nlon: %f\ntime: %v\n", lat, lon, t)
-	sessions[s.port].data[t] = Data{
+	s.data[t] = Data{
 		Time: t,
 		Lat:  lat,
 		Lon:  lon,
 	}
+	s.recentTime = t
+	fmt.Printf("handlepacket: %v\n", s)
 	return nil
 }
 
 // udp handler
-func (s Session) startUDP() bool {
+func (s *Session) startUDP() bool {
 	fmt.Println(" * starting UDP handler.")
 
 	pc, err := net.ListenPacket("udp", s.addr)
