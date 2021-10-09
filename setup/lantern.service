@@ -1,0 +1,18 @@
+[Unit]
+Description=lantern-ingest-server
+ConditionPathExists=/go/pkg/mod/github.com/lantern-org
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+WorkingDirectory=/root/ingest-server
+ExecStart=/go/bin/ingest-server --api-addr="" --udp-addr="" --udp-ports=42069,65533-65535
+
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

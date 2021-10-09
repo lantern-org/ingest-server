@@ -63,11 +63,11 @@ func main() {
 		fmt.Printf("err %v\n", err)
 		return
 	}
-	if !r.MatchString(*apiAddrPtr) && *apiAddrPtr != "" {
+	if !r.MatchString(*apiAddrPtr) && *apiAddrPtr != "" && *apiAddrPtr != "localhost" {
 		fmt.Printf("invalid api-addr %v\n", *apiAddrPtr)
 		return
 	}
-	if !r.MatchString(*udpAddrPtr) && *apiAddrPtr != "" {
+	if !r.MatchString(*udpAddrPtr) && *udpAddrPtr != "" && *udpAddrPtr != "localhost" {
 		fmt.Printf("invalid udp-addr %v\n", *udpAddrPtr)
 		return
 	}

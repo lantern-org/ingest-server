@@ -266,7 +266,7 @@ func endSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func sessionInfo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*") // ONLY FOR DEBUGGING ON LOCAL MACHINE
+	// w.Header().Set("Access-Control-Allow-Origin", "*") // ONLY FOR DEBUGGING ON LOCAL MACHINE
 	/*
 		GET
 		parse session token from URL
