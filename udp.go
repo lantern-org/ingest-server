@@ -82,7 +82,7 @@ func (s *Session) handlePacket(packet []byte) error {
 func (s *Session) startUDP() bool {
 	fmt.Println(" * starting UDP handler.")
 
-	pc, err := net.ListenPacket("udp", s.addr)
+	pc, err := net.ListenPacket("unixgram", s.addr) // todo...
 	if err != nil {
 		fmt.Printf(" ! could not start UDP handler.\n %v \n", err)
 		return false
@@ -98,14 +98,14 @@ func (s *Session) startUDP() bool {
 		for flag {
 			select {
 			case <-s.die:
-				pc.Close()
-				flag = false // close packet listener
+				flag = false
 			case <-kill:
 				kill <- 1 // pass it thru
-				pc.Close()
-				flag = false // close packet listener
+				flag = false
 			}
 		}
+		pc.Close() // close packet listener
+
 		stop <- 1
 		fmt.Println(" * UDP listener on " + s.addr + " ended")
 	}()

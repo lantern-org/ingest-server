@@ -71,7 +71,8 @@ def doit(me):
     port = tmp["port"]
     end = tmp["token"]
     # create socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     # transmit random data packets
     packets = []
     for i in range(num_packets):
@@ -80,7 +81,8 @@ def doit(me):
         # encrypt random packet using AES-256
         packet = AES.new(bytearray.fromhex(key), AES.MODE_ECB).encrypt(packet)
         # send it
-        sock.sendto(packet, ("127.0.0.1",port)) # print?
+        # sock.sendto(packet, ("127.0.0.1",port)) # print?
+        sock.sendto(packet, "/tmp/{}.sock".format(port))
         # wait
         time.sleep(random.randint(10,1000)/1000)
     # we're done

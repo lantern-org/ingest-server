@@ -52,7 +52,8 @@ func main() {
 	// setup command-line args
 	apiAddrPtr := flag.String("api-addr", "", "ip-address for API handler")
 	apiPortPtr := flag.Int("api-port", 420, "port for API handler")
-	udpAddrPtr := flag.String("udp-addr", "", "ip-address for UDP server")
+	udpAddrPtr := flag.String("udp-addr", "/tmp", "root folder for UDP server unix sockets")
+	// TODO -- if you _want_ to listen to internet interfaces, we should allow that...
 	// https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 	udpPortsPtr := flag.String("udp-ports", "42069,49152-65535", "list of ports available for UDP server -- comma-separated list, use '-' to specify port range")
 	flag.Parse()
@@ -67,10 +68,12 @@ func main() {
 		fmt.Printf("invalid api-addr %v\n", *apiAddrPtr)
 		return
 	}
-	if !r.MatchString(*udpAddrPtr) && *udpAddrPtr != "" && *udpAddrPtr != "localhost" {
-		fmt.Printf("invalid udp-addr %v\n", *udpAddrPtr)
-		return
-	}
+	// if !r.MatchString(*udpAddrPtr) && *udpAddrPtr != "" && *udpAddrPtr != "localhost" {
+	// 	fmt.Printf("invalid udp-addr %v\n", *udpAddrPtr)
+	// 	return
+	// }
+	// if not internet address, test for valid os folder
+	//
 	apiAddr = *apiAddrPtr + ":" + strconv.Itoa(*apiPortPtr)
 	udpAddr = *udpAddrPtr
 	var udpPortsList []int

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -154,6 +155,8 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"error\":\"could not allocate session\"}")) // handle error?
 		return
 	}
+	// todo -- test if unix socket exists? (if not using internet)
+	//
 	var code = newCode()
 	if code == "" {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -163,7 +166,8 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	token := uuid.New()
 	s := Session{
-		addr:       udpAddr + ":" + strconv.Itoa(port),
+		// addr:       udpAddr + ":" + strconv.Itoa(port),
+		addr:       fmt.Sprintf("%s/%d.sock", udpAddr, port), // TODO -- allow internet addresses?
 		port:       port,
 		key:        key,
 		token:      token,
@@ -228,7 +232,13 @@ func endSession(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"error\":\"failed\"}")) // handle error?
 		return
 	}
-	udpPorts <- s.port // free back the port (shouldn't block)
+	err = os.Remove(s.addr)
+	if err != nil {
+		// log it, but it's ok i guess
+		log.Printf("couldn't remove socket file %s\n", s.addr)
+	} else {
+		udpPorts <- s.port // free back the port (shouldn't block)
+	}
 	s.die <- 1
 	go func() {
 		// export to file
