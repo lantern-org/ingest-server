@@ -51,7 +51,7 @@ var codes map[string]int = make(map[string]int) // code->port
 func main() {
 	// setup command-line args
 	apiAddrPtr := flag.String("api-addr", "", "ip-address for API handler")
-	apiPortPtr := flag.Int("api-port", 420, "port for API handler")
+	apiPortPtr := flag.Int("api-port", 1025, "port for API handler (>1025, unless running as root)")
 	udpAddrPtr := flag.String("udp-addr", "/tmp", "root folder for UDP server unix sockets")
 	// TODO -- if you _want_ to listen to internet interfaces, we should allow that...
 	// https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
