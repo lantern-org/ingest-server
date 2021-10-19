@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func newPort() int {
@@ -26,7 +27,7 @@ func newPort() int {
 		select {
 		case port, ok := <-udpPorts:
 			if !ok {
-				fmt.Println("udpPorts closed??")
+				log.Println(" ! udpPorts closed??")
 				port = -1
 			}
 			return port
@@ -96,7 +97,11 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	/*
 		POST
 		we receive session key securely over HTTPS
-		{"key":string} -- string should be hex values encoded to characters
+		{
+			"username":string,
+			"password":string,
+			"key":string // string should be hex values encoded to characters
+		}
 
 		we use this session key to decrypt incoming UDP packets
 		send back url for sending packets
@@ -113,8 +118,11 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// get POST body
+	// TODO -- oauth2-type system
 	var v struct {
-		Key string `json:"key"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Key      string `json:"key"`
 	}
 	err := json.NewDecoder(r.Body).Decode(&v) // does json.NewDecoder ever return nil ?
 	if err != nil {
@@ -122,6 +130,21 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		w.Write([]byte("{\"error\":\"" + err.Error() + "\"}")) // handle error?
 		return
+	}
+	// validate user/pass
+	if pw, ok := users[v.Username]; !ok {
+		w.WriteHeader(http.StatusForbidden)
+		w.Header().Add("Content-Type", "application/json")
+		w.Write([]byte("{\"error\":\"get out of my swamp!\"}"))
+		return
+	} else {
+		err := bcrypt.CompareHashAndPassword(pw, []byte(v.Password))
+		if err != nil {
+			w.WriteHeader(http.StatusForbidden)
+			w.Header().Add("Content-Type", "application/json")
+			w.Write([]byte("{\"error\":\"get out of my swamp!\"}"))
+			return
+		}
 	}
 	// decode given key
 	key, err := hex.DecodeString(v.Key)
@@ -165,9 +188,14 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := uuid.New()
+	addr := ""
+	if udpType == "udp" {
+		addr = udpAddr + ":" + strconv.Itoa(port)
+	} else { // assume uinxgram socket
+		addr = fmt.Sprintf("%s/%d.sock", udpAddr, port)
+	}
 	s := Session{
-		// addr:       udpAddr + ":" + strconv.Itoa(port),
-		addr:       fmt.Sprintf("%s/%d.sock", udpAddr, port), // TODO -- allow internet addresses?
+		addr:       addr,
 		port:       port,
 		key:        key,
 		token:      token,
@@ -192,7 +220,7 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("{\"port\":%d,\"token\":\"%s\",\"code\":\"%s\"}", s.port, token.String(), code)))
 }
 
-func endSession(w http.ResponseWriter, r *http.Request) {
+func stopSession(w http.ResponseWriter, r *http.Request) {
 	/*
 		POST
 		we must receive the session token given during startSession
@@ -232,11 +260,15 @@ func endSession(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"error\":\"failed\"}")) // handle error?
 		return
 	}
-	err = os.Remove(s.addr)
-	if err != nil {
-		// log it, but it's ok i guess
-		log.Printf("couldn't remove socket file %s\n", s.addr)
-	} else {
+	if udpType == "unixgram" {
+		err = os.Remove(s.addr)
+		if err != nil {
+			// log it, but it's ok i guess
+			log.Printf("couldn't remove socket file %s\n", s.addr)
+		} else {
+			udpPorts <- s.port // free back the port (shouldn't block)
+		}
+	} else { // with ip addresses we don't have to remove a file
 		udpPorts <- s.port // free back the port (shouldn't block)
 	}
 	s.die <- 1
@@ -246,7 +278,7 @@ func endSession(w http.ResponseWriter, r *http.Request) {
 		// s.StartTime.Format("2006-01-02_15-04-05")
 		f, err := os.Create("data/" + s.token.String() + "_" + strconv.Itoa(s.port) + ".dat")
 		if err != nil {
-			fmt.Printf("err: %v\n", err)
+			log.Printf(" ! err: %v\n", err)
 			return
 		}
 		i := 0
@@ -322,7 +354,7 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 
 // api handler
 func startAPI(iDied chan<- error) {
-	fmt.Println(" * starting API handler.")
+	log.Println(" * starting API handler.")
 
 	srv := &http.Server{Addr: apiAddr}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -331,13 +363,13 @@ func startAPI(iDied chan<- error) {
 		//
 	})
 	http.HandleFunc("/session/start", startSession)
-	http.HandleFunc("/session/end", endSession)
+	http.HandleFunc("/session/stop", stopSession)
 	http.HandleFunc("/location/", sessionInfo) // /location/CODE
 	// /active/CODE
 
 	die := make(chan error)
 	go func() {
-		fmt.Println(" * API listening on " + apiAddr)
+		log.Println(" * API listening on " + apiAddr)
 		err := srv.ListenAndServe()
 		// err != http.ErrServerClosed
 		die <- err
@@ -353,5 +385,5 @@ func startAPI(iDied chan<- error) {
 		}
 	}()
 
-	fmt.Println(" * API handler started.")
+	log.Println(" * API handler started.")
 }

@@ -69,3 +69,34 @@ if someone else wants to send data, then we give them a new port
 ideally, we'll run a server on multiple nodes on the same network, where each node/server serves a port range decided by the orchestrator in a command-line arg
 
 and then the overall network mapper can send a range of ports all to the local network
+
+## user authentication
+
+barebones.
+```
+database = [
+     {"username":string, "password":string, "salt":string},
+     ...
+]
+```
+we have a python script that manages the password database (for now).
+basic crypto.
+client sends plaintext username/password pair (over HTTPS!).
+server looks up username, gets the salt, hashes `password+salt`, checks hash against stored hash.
+use SHA256 hash.
+command-line flag to specify password database file.
+should vet the file as well.
+
+to make it slightly easier, we'll take advantage of the `bcrypt` library.
+basically, this handles the salting automatically.
+it does this simply by generating a random salt upon password generation, doing the `bcrypt` algo, and appending the salt to the front of the resulting hash.
+then, to check a plaintext password, the library just pulls out the salt from the hashed password and uses that to hash the plaintext (and checks the result for a match).
+basically it makes my life slightly easier.
+```
+database = [
+     {"username":string, "password":string},
+     ...
+]
+```
+
+needs to be in `database.json` file

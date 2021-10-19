@@ -5,7 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"log"
 	"math"
 	"net"
 	"time"
@@ -50,12 +50,12 @@ func (s *Session) handlePacket(packet []byte) error {
 	}
 	// decrypt packet
 	packet = s.decrypt(packet) // might need to be locked -- should be okay though
-	fmt.Printf("%v\n", packet)
+	log.Printf(" > %v\n", packet)
 	// validate packet (length already handled, == 32)
 	sum := md5.Sum(packet[:16])
 	for i, b := range sum {
 		if packet[i+16] != b {
-			fmt.Printf("mismatched byte!!\n")
+			log.Printf(" ! mismatched byte!!\n")
 		}
 	}
 	// save somewhere
@@ -67,33 +67,34 @@ func (s *Session) handlePacket(packet []byte) error {
 	var lat = toAngle(packet[0:4])
 	var lon = toAngle(packet[4:8])
 	// just print out data for now
-	fmt.Printf("lat: %f\nlon: %f\ntime: %v\n", lat, lon, t)
+	// log.Printf(" > lat: %f\nlon: %f\ntime: %v\n", lat, lon, t)
 	s.data[t] = Data{
 		Time: t,
 		Lat:  lat,
 		Lon:  lon,
 	}
 	s.recentTime = t
-	fmt.Printf("handlepacket: %v\n", s)
+	log.Printf(" > handlepacket: %v\n", s)
 	return nil
 }
 
 // udp handler
 func (s *Session) startUDP() bool {
-	fmt.Println(" * starting UDP handler.")
+	log.Println(" * starting UDP handler.")
 
-	pc, err := net.ListenPacket("unixgram", s.addr) // todo...
+	pc, err := net.ListenPacket(udpType, s.addr)
 	if err != nil {
-		fmt.Printf(" ! could not start UDP handler.\n %v \n", err)
+		log.Printf(" ! could not start UDP handler.\n %v \n", err)
 		return false
 	}
 
 	buffer := make([]byte, maxBufferSize)
 	stop := make(chan int, 1)
 	go func() {
-		// THE UDP SERVER CANNOT DIE
-		// unless API kills it
-		fmt.Println(" * UDP listening on " + s.addr)
+		// todo -- if udp server dies unexpectedly
+		// re-make it
+		// (ie, have a go-routine that routinely checks health of udp handlers)
+		log.Println(" * UDP listening on " + s.addr)
 		flag := true
 		for flag {
 			select {
@@ -107,7 +108,7 @@ func (s *Session) startUDP() bool {
 		pc.Close() // close packet listener
 
 		stop <- 1
-		fmt.Println(" * UDP listener on " + s.addr + " ended")
+		log.Println(" * UDP listener on " + s.addr + " ended")
 	}()
 
 	go func() {
@@ -121,11 +122,11 @@ func (s *Session) startUDP() bool {
 				// so we'll have to figure out how to receive larger packets
 				n, _, err := pc.ReadFrom(buffer) // len,addr,err
 				if err != nil {
-					fmt.Printf(" ! UDP:%v error = %v\n", s.port, err)
+					log.Printf(" ! UDP:%v error = %v\n", s.port, err)
 					continue
 				}
 				if n != 32 {
-					fmt.Printf(" ! UDP:%v error = %v\n", s.port, errors.New("byte size invalid"))
+					log.Printf(" ! UDP:%v error = %v\n", s.port, errors.New("byte size invalid"))
 					continue
 				}
 				// fmt.Printf(" > packet:\n     bytes:%v\n     from:%s\n", buffer[:n], addr.String())
@@ -134,6 +135,6 @@ func (s *Session) startUDP() bool {
 		}
 	}()
 
-	fmt.Println(" * UDP handler started.")
+	log.Println(" * UDP handler started.")
 	return true
 }
