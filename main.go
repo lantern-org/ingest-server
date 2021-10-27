@@ -136,12 +136,12 @@ func main() {
 	// pull in, parse, verify user database
 	file, err := os.Open(*userDatabaseFilenamePtr)
 	if err != nil {
-		log.Printf(" ! invalid user database file %v\n", err)
+		log.Printf(" ! issue opening %v (error: %v)\n", *userDatabaseFilenamePtr, err)
 		return
 	}
 	filebytes, err := io.ReadAll(file)
 	if err != nil {
-		log.Printf(" ! issue reading %v : %v\n", *userDatabaseFilenamePtr, err)
+		log.Printf(" ! issue reading %v (error: %v)\n", *userDatabaseFilenamePtr, err)
 		return
 	}
 	type User struct {
@@ -151,13 +151,13 @@ func main() {
 	var readUsers []User
 	err = json.Unmarshal(filebytes, &readUsers)
 	if err != nil {
-		log.Printf(" ! issue unmarshaling %v : %v\n", *userDatabaseFilenamePtr, err)
+		log.Printf(" ! issue unmarshaling %v (error: %v)\n", *userDatabaseFilenamePtr, err)
 		return
 	}
 	for _, u := range readUsers {
 		b, err := base64.RawStdEncoding.DecodeString(u.Password)
 		if err != nil {
-			log.Printf(" ! there was some error decoding %v's password : %v\n", u.Username, err)
+			log.Printf(" ! there was some error decoding %v's password (error: %v)\n", u.Username, err)
 		} else {
 			users[u.Username] = b
 		}

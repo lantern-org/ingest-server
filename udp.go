@@ -49,8 +49,9 @@ func (s *Session) handlePacket(packet []byte) error {
 		return errors.New("invalid packet size")
 	}
 	// decrypt packet
+	log.Printf(" > %v %v\n", s.addr, packet)
 	packet = s.decrypt(packet) // might need to be locked -- should be okay though
-	log.Printf(" > %v\n", packet)
+	log.Printf(" > %v %v\n", s.addr, packet)
 	// validate packet (length already handled, == 32)
 	sum := md5.Sum(packet[:16])
 	for i, b := range sum {
@@ -66,15 +67,13 @@ func (s *Session) handlePacket(packet []byte) error {
 	}
 	var lat = toAngle(packet[0:4])
 	var lon = toAngle(packet[4:8])
-	// just print out data for now
-	// log.Printf(" > lat: %f\nlon: %f\ntime: %v\n", lat, lon, t)
 	s.data[t] = Data{
 		Time: t,
 		Lat:  lat,
 		Lon:  lon,
 	}
 	s.recentTime = t
-	log.Printf(" > handlepacket: %v\n", s)
+	// log.Printf(" > handlepacket: %v\n", s)
 	return nil
 }
 
@@ -122,11 +121,11 @@ func (s *Session) startUDP() bool {
 				// so we'll have to figure out how to receive larger packets
 				n, _, err := pc.ReadFrom(buffer) // len,addr,err
 				if err != nil {
-					log.Printf(" ! UDP:%v error = %v\n", s.port, err)
+					log.Printf(" ! UDP: %v error = %v\n", s.addr, err)
 					continue
 				}
 				if n != 32 {
-					log.Printf(" ! UDP:%v error = %v\n", s.port, errors.New("byte size invalid"))
+					log.Printf(" ! UDP: %v error = %v\n", s.addr, errors.New("byte size invalid"))
 					continue
 				}
 				// fmt.Printf(" > packet:\n     bytes:%v\n     from:%s\n", buffer[:n], addr.String())

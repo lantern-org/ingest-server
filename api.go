@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -220,6 +219,7 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("{\"port\":%d,\"token\":\"%s\",\"code\":\"%s\"}", s.port, token.String(), code)))
 }
 
+// TODO -- if server dies before user can end session, what do?
 func stopSession(w http.ResponseWriter, r *http.Request) {
 	/*
 		POST
@@ -315,7 +315,7 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 		check for token in map(token->port)
 		send back relevant info
 		loc==lat,lon pair
-		{"location":[float32, float32], "status":string}
+		{"location":[float32, float32], "time":int32, "status":string}
 		it's up to the caller to save locations to show a built-up route
 		we _only_ give the most recently known location
 		and status updates (TODO)
@@ -329,44 +329,41 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(fmt.Sprintf("{\"error\":\"could not find code '%v'\"}", code)))
+		fmt.Fprintf(w, "{\"error\":\"could not find code '%v'\"}", code)
 		return
 	}
 	sesh, ok := sessions[port]
 	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(fmt.Sprintf("{\"error\":\"illegal state error (code:'%v')\"}", code)))
+		fmt.Fprintf(w, "{\"error\":\"illegal state error (code:'%v')\"}", code)
 		return
 	}
 	data, ok := sesh.data[sesh.recentTime]
 	if !ok {
 		w.WriteHeader(http.StatusTooEarly)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(fmt.Sprintf("{\"error\":\"no data yet! (code:'%v')\"}", code)))
+		fmt.Fprintf(w, "{\"error\":\"no data yet! (code:'%v')\"}", code)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
-	w.Write([]byte(fmt.Sprintf("{\"location\":[%f,%f],\"status\":\"%s\"}", data.Lat, data.Lon, code)))
+	fmt.Fprintf(w, "{\"location\":[%f,%f],\"time\":%d,\"status\":\"%s\"}", data.Lat, data.Lon, data.Time, code)
 }
 
 // api handler
 func startAPI(iDied chan<- error) {
 	log.Println(" * starting API handler.")
-
 	srv := &http.Server{Addr: apiAddr}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		//
-		io.WriteString(w, "hello world\n")
-		//
+		fmt.Fprintf(w, "%q", r.URL.Path)
 	})
 	http.HandleFunc("/session/start", startSession)
 	http.HandleFunc("/session/stop", stopSession)
 	http.HandleFunc("/location/", sessionInfo) // /location/CODE
+	// /location/CODE/all
 	// /active/CODE
-
 	die := make(chan error)
 	go func() {
 		log.Println(" * API listening on " + apiAddr)
@@ -384,6 +381,5 @@ func startAPI(iDied chan<- error) {
 			return
 		}
 	}()
-
 	log.Println(" * API handler started.")
 }
