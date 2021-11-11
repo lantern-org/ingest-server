@@ -54,6 +54,12 @@ var sessions map[int]*Session = make(map[int]*Session) // port->data
 var codes map[string]int = make(map[string]int) // code->port
 
 func main() {
+	{
+		path, err := os.Getwd()
+		log.Printf(" > context directory: %q (error: %v)\n", path, err)
+		path, err = os.Executable()
+		log.Printf(" > executable location: %q (error: %v)\n", path, err)
+	}
 	// setup command-line args
 	apiAddrPtr := flag.String("api-addr", "", "ip-address for API handler")
 	apiPortPtr := flag.Int("api-port", 1025, "port for API handler (>1025, unless running as root)")

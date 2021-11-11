@@ -1,5 +1,11 @@
 # ingest-server
 
+```
+docker build -t ingest-server .
+docker run -it --rm ingest-server
+docker push ghcr.io/lantern-org/ingest-server:latest
+```
+
 You MUST host this server behind an HTTPS proxy!
 
 ## helplful links
