@@ -1,8 +1,8 @@
 # ingest-server
 
 ```
-docker build -t ingest-server .
-docker run -it --rm ingest-server
+docker build -t ghcr.io/lantern-org/ingest-server:latest .
+docker run -it --rm ghcr.io/lantern-org/ingest-server:latest
 docker push ghcr.io/lantern-org/ingest-server:latest
 ```
 
@@ -106,3 +106,5 @@ database = [
 ```
 
 needs to be in `database.json` file
+
+TODO -- do this over headers? this might just be for oauth though

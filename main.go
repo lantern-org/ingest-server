@@ -64,10 +64,10 @@ func main() {
 	apiAddrPtr := flag.String("api-addr", "", "ip-address for API handler")
 	apiPortPtr := flag.Int("api-port", 1025, "port for API handler (>1025, unless running as root)")
 	udpAddrPtr := flag.String("udp-addr", "/tmp", "root folder for UDP server unix sockets (OR ip address)")
-	// TODO -- if you _want_ to listen to internet interfaces, we should allow that...
 	// https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 	udpPortsPtr := flag.String("udp-ports", "42069,49152-65535", "list of ports available for UDP server -- comma-separated list, use '-' to specify port range")
 	userDatabaseFilenamePtr := flag.String("user-file", "database.json", "json user database file")
+	// TODO -- verbose printing
 	flag.Parse()
 
 	// verify args
