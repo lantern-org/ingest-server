@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -311,8 +312,8 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Access-Control-Allow-Origin", "*") // ONLY FOR DEBUGGING ON LOCAL MACHINE
 	/*
 		GET
-		parse session token from URL
-		check for token in map(token->port)
+		parse session code from URL
+		check for code in map(code->port)
 		send back relevant info
 		loc==lat,lon pair
 		{"location":[float32, float32], "time":int32, "status":string}
@@ -352,6 +353,32 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "{\"location\":[%f,%f],\"time\":%d,\"status\":\"%s\"}", data.Lat, data.Lon, data.Time, code)
 }
 
+func tokenLog(w http.ResponseWriter, r *http.Request) {
+	/*
+		GET
+		parse session token from URL
+		attempt to read data/token.dat from file
+		return file contents (should be json)
+	*/
+	token, err := uuid.Parse(strings.TrimPrefix(r.URL.Path, "/location/")) // TODO -- hard-coded; todo -- should be safe?
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Add("Content-Type", "application/json")
+		fmt.Fprint(w, "{\"error\":\"could not find token\"}")
+		return
+	}
+	file, err := os.Open(fmt.Sprintf("data/%s.dat", token)) // unsafe?
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Add("Content-Type", "application/json")
+		fmt.Fprint(w, "{\"error\":\"could not find token\"}")
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	io.Copy(w, file) // todo -- test performance
+}
+
 // api handler
 func startAPI(iDied chan<- error) {
 	log.Println(" * starting API handler.")
@@ -362,8 +389,8 @@ func startAPI(iDied chan<- error) {
 	http.HandleFunc("/session/start", startSession)
 	http.HandleFunc("/session/stop", stopSession)
 	http.HandleFunc("/location/", sessionInfo) // /location/CODE
-	// /location/CODE/all
 	// /active/CODE
+	http.HandleFunc("/log/", tokenLog) // /log/TOKEN
 	die := make(chan error)
 	go func() {
 		log.Println(" * API listening on " + apiAddr)
