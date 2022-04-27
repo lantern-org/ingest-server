@@ -1,19 +1,15 @@
-FROM golang:stretch
-LABEL org.opencontainers.image.source https://github.com/lantern-org/ingest-server
+FROM golang:stretch AS builder
 
 WORKDIR /go/src/ingest-server
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ingest-server .
 
-RUN go get -d -v ./...
-RUN go install -v ./...
+FROM bash
+LABEL org.opencontainers.image.source https://github.com/lantern-org/ingest-server
 
-# todo -- COPY go.mod go.sum; RUN go get; COPY . .; RUN go install
+COPY --from=builder /go/src/ingest-server/ingest-server ./
 
-# todo -- go mod vendor
-
-# todo -- golang 1.18
-
-ENTRYPOINT ["ingest-server"]
+ENTRYPOINT ["./ingest-server"]
 CMD ["--udp-addr=localhost"]
 # ENTRYPOINT [ "sleep", "1000000" ]
 # no need to have a proxy (yet?)

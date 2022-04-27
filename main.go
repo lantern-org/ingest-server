@@ -7,16 +7,19 @@ import (
 	"flag"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-const maxBufferSize = 512 // bytes
+const MAX_BUFFER_SIZE = 256 // bytes
+const PACKET_LENGTH = 48    // bytes
 
 var apiAddr string // = "127.0.0.1:420"
 var udpAddr string // = "127.0.0.1:"
@@ -30,30 +33,37 @@ var kill chan int
 var apiDied chan error
 
 type Data struct {
-	Time int64   `json:"time"`
-	Lat  float32 `json:"latitude"`  // is it worth it to marshal the actual values, or can we use approx?
-	Lon  float32 `json:"longitude"` // i think we can use approx
+	Version  uint32  `json:"version"`
+	Index    uint32  `json:"index"`
+	Time     int64   `json:"time"`      // unix epoch
+	Lat      float32 `json:"latitude"`  // degrees
+	Lon      float32 `json:"longitude"` // degrees
+	Acc      float32 `json:"accuracy"`  // radius meters
+	Internet byte    `json:"internet"`  // 0-4 (relative internet signal strength)
 }
 type Session struct {
 	addr       string
-	port       int
+	Port       int `json:"port"`
 	key        []byte
 	token      uuid.UUID
 	code       string       // 4-char code
 	decr       cipher.Block // the block size == 16 bytes
 	die        chan int
-	StartTime  time.Time      `json:"start"`
-	EndTime    time.Time      `json:"end"`
-	data       map[int64]Data // TODO -- make this a redis cache
-	recentTime int64          // most recently added time
-	Data       []Data         `json:"data"` // sorted exported version
+	udpLoopEnd chan int
+	StartTime  time.Time `json:"start"`
+	EndTime    time.Time `json:"end"`
+	Data       []Data    `json:"data"` // will be sorted
+	PacErrs    int       `json:"num_error_packets"`
 }
 
 var sessions map[int]*Session = make(map[int]*Session) // port->data
+var sessionsLock = sync.RWMutex{}
 
 var codes map[string]int = make(map[string]int) // code->port
+var codesLock = sync.RWMutex{}
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	{
 		path, err := os.Getwd()
 		log.Printf(" > context directory: %q (error: %v)\n", path, err)

@@ -1,9 +1,18 @@
 # ingest-server
 
+**build**
+
 ```
 docker build -t ghcr.io/lantern-org/ingest-server:latest .
-docker run -it --rm ghcr.io/lantern-org/ingest-server:latest
+docker run -it --rm -v ${PWD}:/mnt -p 1025:1025/tcp -p 6000-6009:6000-6009/udp ghcr.io/lantern-org/ingest-server:latest --user-file /mnt/database.json --api-addr 0.0.0.0 --udp-addr 0.0.0.0 --udp-ports 6000-6009
 docker push ghcr.io/lantern-org/ingest-server:latest
+```
+
+**test**
+
+```
+go run -race . --udp-addr localhost --udp-ports 6000-6999
+go run test/stress.go
 ```
 
 You MUST host this server behind an HTTPS proxy!
@@ -49,24 +58,24 @@ Maybe we should format a bit-string.
 ```
 Honestly good enough.
 
+This looks kind-of like IEEE754, so let's just use that instead.
+
 Other data to send:
 - date/time of recorded position (Location.getTime returns long == 64 bits == 8 bytes)
 - checksum (SHA-256 returns 256 bits = 32 bytes -- MD5 returns 128 bits = 16 bytes)
 
-```
-lat  0000siii iiiiiiif ffffffff ffffffff (-> use IEEE 754 float instead)
-lon  0000siii iiiiiiif ffffffff ffffffff
-time bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (useful for ordering, avoiding replay attacks)
-     bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (required: BIG-endian)
-sum  cccccccc cccccccc cccccccc cccccccc (MD5 isn't as strong as SHA256)
-     cccccccc cccccccc cccccccc cccccccc (but we're only using for corruption-checking)
-     cccccccc cccccccc cccccccc cccccccc (consider selecting a few bytes and transmitting just those?)
-     cccccccc cccccccc cccccccc cccccccc
-```
-totals 32 byte packet -- that's pretty good
-
 latitude runs -90 to +90
 longitude runs -180 to +180
+
+packet size must be a multiple of `aes.BlockSize` = 16 bytes
+
+### TODOs
+
+- daily clean-up rotation / ability to pause/restart
+   - if you haven't sent a packet after 20s (customizable), assume paused
+   - if you've been paused for 24hr, assume ended
+- ability to send message update (https request)
+- ensure packet reception order doesn't matter
 
 ## multiple clients
 

@@ -21,7 +21,7 @@ func (s *Session) decrypt(c []byte) []byte {
 	return p
 }
 
-func toAngle(b []byte) float32 {
+func bytesToFloat32(b []byte) float32 {
 	val := binary.BigEndian.Uint32(b)
 	// i := float32((val & 0x07fe0000) >> 17)
 	// f := float32(val&0x0001ffff) / 100000
@@ -34,12 +34,16 @@ func toAngle(b []byte) float32 {
 	return math.Float32frombits(val)
 }
 
-func toTime(b []byte) int64 {
+func bytesToTime(b []byte) int64 {
 	// require transmission in BigEndian
 	val := binary.BigEndian.Uint64(b) // millis
 	sec := val / 1000
 	nsec := (val - sec*1000) * 1000000
 	return time.Unix(int64(sec), int64(nsec)).UnixMilli()
+}
+
+func bytesToInt32(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b)
 }
 
 func (s *Session) handlePacket(packet []byte) error {
@@ -49,30 +53,28 @@ func (s *Session) handlePacket(packet []byte) error {
 		return errors.New("invalid packet size")
 	}
 	// decrypt packet
-	log.Printf(" > %v %v\n", s.addr, packet)
+	// log.Printf(" > %v %v\n", s.addr, packet)
 	packet = s.decrypt(packet) // might need to be locked -- should be okay though
-	log.Printf(" > %v %v\n", s.addr, packet)
-	// validate packet (length already handled, == 32)
-	sum := md5.Sum(packet[:16])
+	// log.Printf(" > %v %v\n", s.addr, packet)
+	// validate packet (length already handled, == PACKET_LENGTH)
+	sum := md5.Sum(packet[:PACKET_LENGTH-md5.Size])
 	for i, b := range sum {
-		if packet[i+16] != b {
-			log.Printf(" ! mismatched byte!!\n")
+		if packet[i+PACKET_LENGTH-md5.Size] != b {
+			// ignore packet
+			return errors.New("mismatched byte")
 		}
 	}
 	// save somewhere
-	var t = toTime(packet[8:16])
-	if _, ok := s.data[t]; ok {
-		// ignore packet
-		return errors.New("packet time already recorded")
-	}
-	var lat = toAngle(packet[0:4])
-	var lon = toAngle(packet[4:8])
-	s.data[t] = Data{
-		Time: t,
-		Lat:  lat,
-		Lon:  lon,
-	}
-	s.recentTime = t
+	// can switch on the packet version here if later iterations require
+	s.Data = append(s.Data, Data{
+		Version:  bytesToInt32(packet[0:4]),
+		Index:    bytesToInt32(packet[4:8]),
+		Time:     bytesToTime(packet[8:16]),
+		Lat:      bytesToFloat32(packet[16:20]),
+		Lon:      bytesToFloat32(packet[20:24]),
+		Acc:      bytesToFloat32(packet[24:28]),
+		Internet: packet[28],
+	})
 	// log.Printf(" > handlepacket: %v\n", s)
 	return nil
 }
@@ -87,7 +89,7 @@ func (s *Session) startUDP() bool {
 		return false
 	}
 
-	buffer := make([]byte, maxBufferSize)
+	buffer := make([]byte, MAX_BUFFER_SIZE)
 	stop := make(chan int, 1)
 	go func() {
 		// todo -- if udp server dies unexpectedly
@@ -114,6 +116,7 @@ func (s *Session) startUDP() bool {
 		for {
 			select {
 			case <-stop:
+				s.udpLoopEnd <- 1
 				return
 			default:
 				// handle packet
@@ -121,15 +124,21 @@ func (s *Session) startUDP() bool {
 				// so we'll have to figure out how to receive larger packets
 				n, _, err := pc.ReadFrom(buffer) // len,addr,err
 				if err != nil {
-					log.Printf(" ! UDP: %v error = %v\n", s.addr, err)
-					continue
+					// log.Printf(" ! UDP: %v error = %v\n", s.addr, err)
+					// not necessarily a packet error -- usually just a "read from closed connection" error
+					continue // we could potentially just break here?
 				}
-				if n != 32 {
-					log.Printf(" ! UDP: %v error = %v\n", s.addr, errors.New("byte size invalid"))
+				if n != PACKET_LENGTH {
+					// log.Printf(" ! UDP: %v error = %v\n", s.addr, errors.New("byte size invalid"))
+					s.PacErrs += 1
 					continue
 				}
 				// fmt.Printf(" > packet:\n     bytes:%v\n     from:%s\n", buffer[:n], addr.String())
-				go func() { s.handlePacket(buffer[:n]) }()
+				if err := s.handlePacket(buffer[:n]); err != nil {
+					s.PacErrs += 1
+				}
+				// could put buffer data into channel and have worker go thru channel?
+				//  but that's just shifting the problem to someone else -- eventually the work will pile up anyway
 			}
 		}
 	}()
