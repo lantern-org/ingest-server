@@ -7,15 +7,15 @@ Details the UDP packet specification
 ```txt
 infoxxxx 00000000 00000000 00000000 00000000 more info
 ============================================
-version  uuuuuuuu uuuuuuuu uuuuuuuu uuuuuuuu protocol version
-index    uuuuuuuu uuuuuuuu uuuuuuuu uuuuuuuu (1)
-time     bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (2)
+misc     b000bbbb 00000000 uuuuuuuu uuuuuuuu (1)
+index    uuuuuuuu uuuuuuuu uuuuuuuu uuuuuuuu (2)
+time     bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb (3)
          bbbbbbbb bbbbbbbb bbbbbbbb bbbbbbbb
 --------------------------------------------
 lat      ffffffff ffffffff ffffffff ffffffff IEEE 754 float
 lon      ffffffff ffffffff ffffffff ffffffff
 accuracy ffffffff ffffffff ffffffff ffffffff
-misc     0000bbbb 00000000 00000000 00000000 (3)
+         00000000 00000000 00000000 00000000 reserved
 --------------------------------------------
 sum      cccccccc cccccccc cccccccc cccccccc (4)
          cccccccc cccccccc cccccccc cccccccc
@@ -27,16 +27,19 @@ used = 3 blocks * 16 bytes/block = 48 bytes
 
 notes
 0. all integer-like values are BIG-endian
-1. unsigned 4-byte int -- packet number
+1. misc info
+   - `b[ 0 ,  0]=0,1` -- 0=BigEndian, 1=LittleEndian -- endianness of data in packet
+   - `b[ 1 ,  3]=0` reserved
+   - `b[ 4 ,  7]=0-4` min-max unsigned half-byte (space for `[0,15]`) -- internet signal strength
+   - `b[ 8 , 15]=0` reserved
+   - `b[16 , 31]=0-65535` unsigned 2-byte integer -- packet protocol version
+2. unsigned 4-byte int -- packet number
    - if we send one packet per millisecond, then the max recording time is 2^32 / 1000 / 60 / 60 / 24 ~ 49.7 days
       - the maximum amount of transmitted data is thus 2^32 * 48 / 1024 / 1024 / 1024 = 192 GB
    - useful for ordering, avoiding replay attacks
-2. ms since epoch
+3. ms since epoch
    - the universe will die before we run out of milliseconds since 01/01/1970
    - useful for ordering, avoiding replay attacks
-3. misc info
-   - internet signal strength b[4,7]=0-4 min-max (space for 15)
-   - plenty of space for other real-time info
 4. MD5 checksum
    - MD5 isn't as strong as SHA256, but it's half the space
    - plus, we're only using for corruption-checking, not security

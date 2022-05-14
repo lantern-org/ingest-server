@@ -71,9 +71,6 @@ packet size must be a multiple of `aes.BlockSize` = 16 bytes
 
 ### TODOs
 
-- daily clean-up rotation / ability to pause/restart
-   - if you haven't sent a packet after 20s (customizable), assume paused
-   - if you've been paused for 24hr, assume ended
 - ability to send message update (https request)
 - ensure packet reception order doesn't matter
 

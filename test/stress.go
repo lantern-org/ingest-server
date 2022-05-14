@@ -40,16 +40,23 @@ func randPacket(i uint32, encr cipher.Block) packet {
 	// time.Now().UnixMilli()
 	t := int64(i)
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, uint32(1))
-	binary.Write(&buf, binary.BigEndian, i)
-	binary.Write(&buf, binary.BigEndian, t)
-	binary.Write(&buf, binary.BigEndian, lat)
-	binary.Write(&buf, binary.BigEndian, lon)
-	binary.Write(&buf, binary.BigEndian, acc)
-	binary.Write(&buf, binary.BigEndian, byte(4))
-	binary.Write(&buf, binary.BigEndian, byte(0))
-	binary.Write(&buf, binary.BigEndian, byte(0))
-	binary.Write(&buf, binary.BigEndian, byte(0))
+	var end binary.ByteOrder = binary.BigEndian
+	if end == binary.BigEndian {
+		binary.Write(&buf, binary.BigEndian, byte(4)) // 0000bbbb
+	} else {
+		binary.Write(&buf, binary.LittleEndian, byte(128+4)) // b000bbbb
+	}
+	binary.Write(&buf, end, byte(0))
+	binary.Write(&buf, end, uint16(1))
+	binary.Write(&buf, end, i)
+	binary.Write(&buf, end, t)
+	binary.Write(&buf, end, lat)
+	binary.Write(&buf, end, lon)
+	binary.Write(&buf, end, acc)
+	binary.Write(&buf, end, byte(0)) // can't use uint64(0)
+	binary.Write(&buf, end, byte(0))
+	binary.Write(&buf, end, byte(0))
+	binary.Write(&buf, end, byte(0))
 	sum := md5.Sum(buf.Bytes())
 	buf.Write(sum[:])
 	p := buf.Bytes()

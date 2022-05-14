@@ -21,33 +21,44 @@ func (s *Session) decrypt(c []byte) []byte {
 	return p
 }
 
-func bytesToFloat32(b []byte) float32 {
-	val := binary.BigEndian.Uint32(b)
-	// i := float32((val & 0x07fe0000) >> 17)
-	// f := float32(val&0x0001ffff) / 100000
-	// l := i + f
-	// if val&0x08000000 > 0 {
-	// 	l *= -1
-	// }
-	// // return fmt.Sprintf("%v", l)
-	// return l
-	return math.Float32frombits(val)
+func bytesToFloat32BE(b []byte) float32 {
+	return math.Float32frombits(binary.BigEndian.Uint32(b))
+}
+func bytesToFloat32LE(b []byte) float32 {
+	return math.Float32frombits(binary.LittleEndian.Uint32(b))
 }
 
-func bytesToTime(b []byte) int64 {
-	// require transmission in BigEndian
-	val := binary.BigEndian.Uint64(b) // millis
-	sec := val / 1000
-	nsec := (val - sec*1000) * 1000000
+func uint64ToTime(v uint64) int64 {
+	sec := v / 1000
+	nsec := (v - sec*1000) * 1000000
 	return time.Unix(int64(sec), int64(nsec)).UnixMilli()
 }
+func bytesToTimeBE(b []byte) int64 {
+	return uint64ToTime(binary.BigEndian.Uint64(b)) // millis
+}
+func bytesToTimeLE(b []byte) int64 {
+	return uint64ToTime(binary.LittleEndian.Uint64(b)) // millis
+}
 
-func bytesToInt32(b []byte) uint32 {
+func bytesToUInt32BE(b []byte) uint32 {
 	return binary.BigEndian.Uint32(b)
+}
+func bytesToUInt32LE(b []byte) uint32 {
+	return binary.LittleEndian.Uint32(b)
+}
+
+func bytesToUInt16BE(b []byte) uint16 {
+	return binary.BigEndian.Uint16(b)
+}
+func bytesToUInt16LE(b []byte) uint16 {
+	return binary.LittleEndian.Uint16(b)
 }
 
 func (s *Session) handlePacket(packet []byte) error {
 	// TODO -- this should be safe inside a go-routine
+	if len(packet) != PACKET_LENGTH {
+		return errors.New("received-bytes length invalid")
+	}
 	if len(packet)%aes.BlockSize != 0 {
 		// ignore packet
 		return errors.New("invalid packet size")
@@ -66,36 +77,58 @@ func (s *Session) handlePacket(packet []byte) error {
 	}
 	// save somewhere
 	// can switch on the packet version here if later iterations require
-	s.Data = append(s.Data, Data{
-		Version:  bytesToInt32(packet[0:4]),
-		Index:    bytesToInt32(packet[4:8]),
-		Time:     bytesToTime(packet[8:16]),
-		Lat:      bytesToFloat32(packet[16:20]),
-		Lon:      bytesToFloat32(packet[20:24]),
-		Acc:      bytesToFloat32(packet[24:28]),
-		Internet: packet[28],
-	})
+	if packet[0]&0b10000000 == 0 { // endianness =0 Big, >0 Little
+		// big-endian
+		s.Data = append(s.Data, Data{
+			Version:   bytesToUInt16BE(packet[2:4]),
+			Index:     bytesToUInt32BE(packet[4:8]),
+			Time:      bytesToTimeBE(packet[8:16]),
+			Lat:       bytesToFloat32BE(packet[16:20]),
+			Lon:       bytesToFloat32BE(packet[20:24]),
+			Acc:       bytesToFloat32BE(packet[24:28]),
+			Internet:  packet[0],
+			Processed: time.Now().Unix(),
+		})
+	} else {
+		// little-endian
+		s.Data = append(s.Data, Data{
+			Version:   bytesToUInt16LE(packet[2:4]),
+			Index:     bytesToUInt32LE(packet[4:8]),
+			Time:      bytesToTimeLE(packet[8:16]),
+			Lat:       bytesToFloat32LE(packet[16:20]),
+			Lon:       bytesToFloat32LE(packet[20:24]),
+			Acc:       bytesToFloat32LE(packet[24:28]),
+			Internet:  packet[0] ^ 0b10000000,
+			Processed: time.Now().Unix(),
+		})
+	}
+	if <-s.paused {
+		log.Printf(" * UDP listener (%v) unpaused\n", s.addr)
+	}
+	s.paused <- false
+	s.pause.Reset(pauseDuration)
 	// log.Printf(" > handlepacket: %v\n", s)
 	return nil
 }
 
 // udp handler
 func (s *Session) startUDP() bool {
-	log.Println(" * starting UDP handler.")
+	log.Printf(" * UDP listener (%v) starting\n", s.addr)
 
 	pc, err := net.ListenPacket(udpType, s.addr)
 	if err != nil {
-		log.Printf(" ! could not start UDP handler.\n %v \n", err)
+		log.Printf(" ! could not start UDP listener (%v) with error %v \n", s.addr, err)
 		return false
 	}
 
 	buffer := make([]byte, MAX_BUFFER_SIZE)
 	stop := make(chan int, 1)
+	s.pause = time.NewTicker(pauseDuration)
+	s.paused <- false
 	go func() {
 		// todo -- if udp server dies unexpectedly
 		// re-make it
 		// (ie, have a go-routine that routinely checks health of udp handlers)
-		log.Println(" * UDP listening on " + s.addr)
 		flag := true
 		for flag {
 			select {
@@ -104,15 +137,30 @@ func (s *Session) startUDP() bool {
 			case <-kill:
 				kill <- 1 // pass it thru
 				flag = false
+			case <-s.pause.C:
+				if <-s.paused {
+					s.paused <- true
+					// kill self
+					log.Printf(" * UDP listener (%v) paused for %v -- killing self\n", s.addr, stopDuration)
+					kill <- 1
+					flag = false
+					// TODO -- save the data?
+				} else {
+					s.paused <- true
+					// check back in an hour
+					log.Printf(" * UDP listener (%v) inactive after %v -- setting pause state\n", s.addr, pauseDuration)
+					s.pause.Reset(stopDuration)
+				}
 			}
 		}
 		pc.Close() // close packet listener
-
+		s.pause.Stop()
 		stop <- 1
 		log.Println(" * UDP listener on " + s.addr + " ended")
 	}()
 
 	go func() {
+		log.Println(" * UDP listening on " + s.addr)
 		for {
 			select {
 			case <-stop:
@@ -124,17 +172,13 @@ func (s *Session) startUDP() bool {
 				// so we'll have to figure out how to receive larger packets
 				n, _, err := pc.ReadFrom(buffer) // len,addr,err
 				if err != nil {
-					// log.Printf(" ! UDP: %v error = %v\n", s.addr, err)
+					// log.Printf(" ! UDP (%v) error = %v\n", s.addr, err)
 					// not necessarily a packet error -- usually just a "read from closed connection" error
 					continue // we could potentially just break here?
 				}
-				if n != PACKET_LENGTH {
-					// log.Printf(" ! UDP: %v error = %v\n", s.addr, errors.New("byte size invalid"))
-					s.PacErrs += 1
-					continue
-				}
 				// fmt.Printf(" > packet:\n     bytes:%v\n     from:%s\n", buffer[:n], addr.String())
 				if err := s.handlePacket(buffer[:n]); err != nil {
+					// log.Printf(" ! UDP (%v) error = %v\n", s.addr, err)
 					s.PacErrs += 1
 				}
 				// could put buffer data into channel and have worker go thru channel?

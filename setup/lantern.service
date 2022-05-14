@@ -5,11 +5,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=daemon
+Group=daemon
 
 WorkingDirectory=/root/ingest-server
-ExecStart=/go/bin/ingest-server --api-addr="" --udp-addr="" --udp-ports=42069,65533-65535
+ExecStart=/go/bin/ingest-server --api-addr=127.0.0.1 --api-port=4200 --udp-ports=42069,65533-65535
 
 Restart=on-failure
 RestartSec=10

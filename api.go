@@ -89,11 +89,6 @@ func newCode() string {
 }
 
 /*
-TODO -- add timer for each UDP session that kills the connection
-if it hasn't received an update in a while (30mins?)
-*/
-
-/*
 TODO -- proper logging and error messages
 */
 
@@ -141,14 +136,11 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		w.Write([]byte("{\"error\":\"get out of my swamp!\"}"))
 		return
-	} else {
-		err := bcrypt.CompareHashAndPassword(pw, []byte(v.Password))
-		if err != nil {
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			w.Write([]byte("{\"error\":\"get out of my swamp!\"}"))
-			return
-		}
+	} else if err := bcrypt.CompareHashAndPassword(pw, []byte(v.Password)); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		w.Header().Add("Content-Type", "application/json")
+		w.Write([]byte("{\"error\":\"get out of my swamp!\"}"))
+		return
 	}
 	// decode given key
 	key, err := hex.DecodeString(v.Key)
@@ -177,11 +169,11 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	var port = newPort()
 	// ok==true imples that port's session is still active (shouldn't happen unless there's an inconsistency)
 	sessionsLock.RLock()
-	if _, ok := sessions[port]; port == -1 || ok { // TODO -- send to inside newPort ?
+	if _, ok := sessions[port]; port == -1 || ok {
 		sessionsLock.RUnlock()
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte("{\"error\":\"could not allocate session\"}")) // handle error?
+		w.Write([]byte("{\"error\":\"could not allocate session\"}"))
 		return
 	}
 	sessionsLock.RUnlock()
@@ -210,6 +202,7 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		decr:       decr,
 		die:        make(chan int, 1),
 		udpLoopEnd: make(chan int, 1),
+		paused:     make(chan bool, 1),
 		StartTime:  time.Now(),
 		Data:       make([]Data, 0, 36000), // pre-alloc -- avg 10 pac/sec for 1 hour = 60*60*10 = 36000
 	}
@@ -364,7 +357,11 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := sesh.Data[len(sesh.Data)-1] // !!! not guaranteed to be the latest update
-
+	status := "TODO"                    // TODO -- last-known status update
+	if <-sesh.paused {                  // TODO -- verify this
+		sesh.paused <- true
+		status = "Paused"
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
@@ -373,7 +370,7 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 			Status string `json:"status"`
 		}{
 			data,
-			"", // TODO -- last-known status update
+			status,
 		},
 	)
 }
