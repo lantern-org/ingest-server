@@ -60,7 +60,8 @@ type Session struct {
 	StartTime  time.Time `json:"start"`
 	EndTime    time.Time `json:"end"`
 	Data       []Data    `json:"data"` // will be sorted
-	PacErrs    int       `json:"num_error_packets"`
+	dataLock   sync.RWMutex
+	PacErrs    int `json:"num_error_packets"`
 }
 
 var sessions map[int]*Session = make(map[int]*Session) // port->data

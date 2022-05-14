@@ -77,9 +77,10 @@ func (s *Session) handlePacket(packet []byte) error {
 	}
 	// save somewhere
 	// can switch on the packet version here if later iterations require
+	var d Data
 	if packet[0]&0b10000000 == 0 { // endianness =0 Big, >0 Little
 		// big-endian
-		s.Data = append(s.Data, Data{
+		d = Data{
 			Version:   bytesToUInt16BE(packet[2:4]),
 			Index:     bytesToUInt32BE(packet[4:8]),
 			Time:      bytesToTimeBE(packet[8:16]),
@@ -88,10 +89,10 @@ func (s *Session) handlePacket(packet []byte) error {
 			Acc:       bytesToFloat32BE(packet[24:28]),
 			Internet:  packet[0],
 			Processed: time.Now().Unix(),
-		})
+		}
 	} else {
 		// little-endian
-		s.Data = append(s.Data, Data{
+		d = Data{
 			Version:   bytesToUInt16LE(packet[2:4]),
 			Index:     bytesToUInt32LE(packet[4:8]),
 			Time:      bytesToTimeLE(packet[8:16]),
@@ -100,8 +101,11 @@ func (s *Session) handlePacket(packet []byte) error {
 			Acc:       bytesToFloat32LE(packet[24:28]),
 			Internet:  packet[0] ^ 0b10000000,
 			Processed: time.Now().Unix(),
-		})
+		}
 	}
+	s.dataLock.Lock()
+	s.Data = append(s.Data, d)
+	s.dataLock.Unlock()
 	if <-s.paused {
 		log.Printf(" * UDP listener (%v) unpaused\n", s.addr)
 	}
@@ -155,7 +159,9 @@ func (s *Session) startUDP() bool {
 		}
 		pc.Close() // close packet listener
 		s.pause.Stop()
-		stop <- 1
+		close(s.paused)
+		// stop <- 1
+		close(stop)
 		log.Println(" * UDP listener on " + s.addr + " ended")
 	}()
 

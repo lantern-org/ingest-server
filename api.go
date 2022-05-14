@@ -350,17 +350,28 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "{\"error\":\"illegal state error (code:'%v')\"}", code)
 		return
 	}
+	sesh.dataLock.RLock()
 	if len(sesh.Data) == 0 {
+		sesh.dataLock.RUnlock()
 		w.WriteHeader(http.StatusTooEarly)
 		w.Header().Add("Content-Type", "application/json")
 		fmt.Fprintf(w, "{\"error\":\"no data yet! (code:'%v')\"}", code)
 		return
 	}
 	data := sesh.Data[len(sesh.Data)-1] // !!! not guaranteed to be the latest update
-	status := "TODO"                    // TODO -- last-known status update
-	if <-sesh.paused {                  // TODO -- verify this
-		sesh.paused <- true
-		status = "Paused"
+	sesh.dataLock.RUnlock()
+	status := "TODO" // TODO -- last-known status update
+	select {
+	case p, ok := <-sesh.paused:
+		if !ok {
+			status = "Exited"
+		} else {
+			sesh.paused <- p
+			if p {
+				status = "Paused"
+			}
+		}
+	default:
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
