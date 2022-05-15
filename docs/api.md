@@ -50,7 +50,11 @@ OR
 [GET]  /location/{CODE}
 <-
 -> json
-{"location":[float32, float32], "time":int32, "status":string}
+{
+    "version":uint16, "index":uint32, "time":int64,
+    "latitude":float32, "longitude":float32, "accuracy":float32,
+    "internet":byte "processed":int64 "status":string
+}
 {"error":string}
 
 [GET]  /log/{TOKEN}

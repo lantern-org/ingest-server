@@ -321,8 +321,12 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 		parse session code from URL
 		check for code in map(code->port)
 		send back relevant info
-		loc==lat,lon pair
-		{"location":[float32, float32], "time":int32, "status":string}
+		(see Data struct)
+		{
+			"version":uint16, "index":uint32, "time":int64,
+			"latitude":float32, "longitude":float32, "accuracy":float32,
+			"internet":byte "processed":int64 "status":string
+		}
 		it's up to the caller to save locations to show a built-up route
 		we _only_ give the most recently known location
 		and status updates (TODO)
