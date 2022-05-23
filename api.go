@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -200,7 +199,7 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 		token:      token,
 		code:       code,
 		decr:       decr,
-		die:        make(chan int, 1),
+		die:        make(chan int, 2),
 		udpLoopEnd: make(chan int, 1),
 		paused:     make(chan bool, 1),
 		StartTime:  time.Now(),
@@ -224,7 +223,6 @@ func startSession(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("{\"port\":%d,\"token\":\"%s\",\"code\":\"%s\"}", s.Port, token.String(), code)))
 }
 
-// TODO -- if server dies before user can end session, what do?
 func stopSession(w http.ResponseWriter, r *http.Request) {
 	/*
 		POST
@@ -250,7 +248,7 @@ func stopSession(w http.ResponseWriter, r *http.Request) {
 		Port  int    `json:"port"`
 		Token string `json:"token"`
 	}
-	err := json.NewDecoder(r.Body).Decode(&v) // does json.NewDecoder ever return nil ?
+	err := json.NewDecoder(r.Body).Decode(&v)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Header().Add("Content-Type", "application/json")
@@ -267,47 +265,7 @@ func stopSession(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"error\":\"failed\"}")) // handle error?
 		return
 	}
-	if udpType == "unixgram" {
-		err = os.Remove(s.addr)
-		if err != nil {
-			// log it, but it's ok i guess
-			log.Printf("couldn't remove socket file %s\n", s.addr)
-		} else {
-			udpPorts <- s.Port // free back the port (shouldn't block)
-		}
-	} else { // with ip addresses we don't have to remove a file
-		udpPorts <- s.Port // free back the port (shouldn't block)
-	}
-	s.die <- 1
-	go func() {
-		// wait until UDP loop ends
-		<-s.udpLoopEnd
-		// export to file
-		s.EndTime = time.Now()
-		// s.StartTime.Format("2006-01-02_15-04-05")
-		f, err := os.Create("data/" + s.token.String() + ".dat")
-		if err != nil {
-			log.Printf(" ! err: %v\n", err)
-			return
-		}
-		sort.Slice(s.Data, func(i, j int) bool { return s.Data[i].Time < s.Data[j].Time }) // slow, but it's ok
-		j, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			// w.WriteHeader(http.StatusInternalServerError)
-			// w.Header().Add("Content-Type", "application/json")
-			// w.Write([]byte("{\"error\":\"" + err.Error() + "\"}")) // handle error?
-			return
-		}
-		f.Write(j)
-		f.Close() // don't care about error
-		// finally, delete the session from our active map
-		sessionsLock.Lock()
-		delete(sessions, v.Port)
-		sessionsLock.Unlock()
-		codesLock.Lock()
-		delete(codes, s.code)
-		codesLock.Unlock()
-	}()
+	s.die <- 1 // signal to UDP handler that we're done
 	// assume go-routine succeeded
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
@@ -366,14 +324,13 @@ func sessionInfo(w http.ResponseWriter, r *http.Request) {
 	sesh.dataLock.RUnlock()
 	status := "TODO" // TODO -- last-known status update
 	select {
-	case p, ok := <-sesh.paused:
-		if !ok {
-			status = "Exited"
-		} else {
-			sesh.paused <- p
-			if p {
-				status = "Paused"
-			}
+	case <-sesh.die:
+		status = "Exited"
+		break
+	case p := <-sesh.paused:
+		sesh.paused <- p
+		if p {
+			status = "Paused"
 		}
 	default:
 	}

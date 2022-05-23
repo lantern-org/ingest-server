@@ -4,10 +4,13 @@ import (
 	"crypto/aes"
 	"crypto/md5"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"log"
 	"math"
 	"net"
+	"os"
+	"sort"
 	"time"
 )
 
@@ -137,6 +140,7 @@ func (s *Session) startUDP() bool {
 		for flag {
 			select {
 			case <-s.die:
+				s.die <- 1 // pass it thru for api in case paused -> die
 				flag = false
 			case <-kill:
 				kill <- 1 // pass it thru
@@ -145,9 +149,10 @@ func (s *Session) startUDP() bool {
 				if <-s.paused {
 					s.paused <- true
 					// kill self
+					s.die <- 1
 					log.Printf(" * UDP listener (%v) paused for %v -- killing self\n", s.addr, stopDuration)
 					flag = false // breaking the loop kills self
-					// TODO -- save the data?
+					// close(stop) ends udp loop and saves data
 				} else {
 					s.paused <- true
 					// check back in an hour
@@ -160,6 +165,7 @@ func (s *Session) startUDP() bool {
 		s.pause.Stop()
 		close(s.paused)
 		close(stop) // stop <- 1
+		s.stopUDP()
 		log.Println(" * UDP listener on " + s.addr + " ended")
 	}()
 
@@ -168,7 +174,6 @@ func (s *Session) startUDP() bool {
 		for {
 			select {
 			case <-stop:
-				s.udpLoopEnd <- 1
 				return
 			default:
 				// handle packet
@@ -193,4 +198,44 @@ func (s *Session) startUDP() bool {
 
 	log.Println(" * UDP handler started.")
 	return true
+}
+
+func (s *Session) stopUDP() {
+	log.Println(" * UDP listener on " + s.addr + " saving data")
+	if udpType == "unixgram" {
+		err := os.Remove(s.addr)
+		if err != nil {
+			// log it, but it's ok i guess
+			log.Printf("couldn't remove socket file %s\n", s.addr)
+		} else {
+			udpPorts <- s.Port // free back the port (shouldn't block)
+		}
+	} else { // with ip addresses we don't have to remove a file
+		udpPorts <- s.Port // free back the port (shouldn't block)
+	}
+	// export to file
+	s.EndTime = time.Now()
+	// s.StartTime.Format("2006-01-02_15-04-05")
+	f, err := os.Create("data/" + s.token.String() + ".dat")
+	if err != nil {
+		log.Printf(" ! err: %v\n", err)
+		return
+	}
+	sort.Slice(s.Data, func(i, j int) bool { return s.Data[i].Time < s.Data[j].Time }) // slow, but it's ok
+	j, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		// w.WriteHeader(http.StatusInternalServerError)
+		// w.Header().Add("Content-Type", "application/json")
+		// w.Write([]byte("{\"error\":\"" + err.Error() + "\"}")) // handle error?
+		return
+	}
+	f.Write(j)
+	f.Close() // don't care about error
+	// finally, delete the session from our active map
+	sessionsLock.Lock()
+	delete(sessions, s.Port)
+	sessionsLock.Unlock()
+	codesLock.Lock()
+	delete(codes, s.code)
+	codesLock.Unlock()
 }
