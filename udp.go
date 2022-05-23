@@ -146,8 +146,7 @@ func (s *Session) startUDP() bool {
 					s.paused <- true
 					// kill self
 					log.Printf(" * UDP listener (%v) paused for %v -- killing self\n", s.addr, stopDuration)
-					kill <- 1
-					flag = false
+					flag = false // breaking the loop kills self
 					// TODO -- save the data?
 				} else {
 					s.paused <- true
@@ -160,8 +159,7 @@ func (s *Session) startUDP() bool {
 		pc.Close() // close packet listener
 		s.pause.Stop()
 		close(s.paused)
-		// stop <- 1
-		close(stop)
+		close(stop) // stop <- 1
 		log.Println(" * UDP listener on " + s.addr + " ended")
 	}()
 

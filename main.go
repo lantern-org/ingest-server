@@ -32,7 +32,7 @@ var stopDuration time.Duration
 
 var users map[string][]byte = make(map[string][]byte) // username->hashedPassword
 
-var kill chan int
+var kill chan int // global kill
 
 var apiDied chan error
 
