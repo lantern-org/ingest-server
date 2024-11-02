@@ -373,10 +373,29 @@ func tokenLog(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, file) // todo -- test performance
 }
 
+func roomList(w http.ResponseWriter, r *http.Request) {
+	/*
+		GET
+		send a list of all room codes
+		[]string
+	*/
+	codesLock.RLock()
+	codeList := make([]string, 0, len(codes))
+	for k := range codes {
+		codeList = append(codeList, k)
+	}
+	codesLock.RUnlock()
+	// TODO sort rooms by most active? idk LOL
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(codeList)
+}
+
 // api handler
 func startAPI(iDied chan<- error) {
 	log.Println(" * starting API handler.")
 	srv := &http.Server{Addr: apiAddr}
+	// TODO use a real router library
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "%q", r.URL.Path)
 	})
@@ -385,6 +404,7 @@ func startAPI(iDied chan<- error) {
 	http.HandleFunc("/location/", sessionInfo) // /location/CODE
 	// /active/CODE
 	http.HandleFunc("/log/", tokenLog) // /log/TOKEN
+	http.HandleFunc("/rooms", roomList)
 	die := make(chan error)
 	go func() {
 		log.Println(" * API listening on " + apiAddr)
